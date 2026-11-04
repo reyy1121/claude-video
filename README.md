@@ -150,6 +150,24 @@ Next, try a public video URL and ask for **transcript detail**. Native captions 
 
 You can add [speech transcription](#choose-a-transcription-fallback) afterward. **Local WhisperX requires Watch v0.3.0 or later**; if your installed copy is v0.2.0, update after the new release is available.
 
+## Learn from videos, then decide with it
+
+Ask the agent to **watch and learn** a video, reel, playlist, or file. Watch turns each one into a note (summary, frameworks, if/then decision rules, numbers, caveats, timestamps) and saves it into your own advisor skill, by default `~/.claude/skills/video-advisor`. That folder is a normal skill, so later you just ask:
+
+```text
+watch and learn https://www.youtube.com/watch?v=...   — my goal is to grow my agency
+watch and learn every video in https://www.youtube.com/playlist?list=...
+/video-advisor Should I raise my prices or add a cheaper tier first?
+```
+
+The advisor reads your playbook and notes, asks for anything missing about your situation, and answers with what your videos say (cited by title and timestamp), where they disagree, its own recommendation, risks, and next steps. It can log the decision so you can review how it turned out. Notes are plain Markdown you can edit; `PLAYBOOK.md` collects decision rules across videos. Set `WATCH_KNOWLEDGE_DIR` (or `knowledge.py --dir`) to keep the library elsewhere, and `knowledge.py init --name <name>` to rename it. In Claude Code, start a new session after the first note so `/video-advisor` appears.
+
+## Instagram, Google Drive, and MEGA
+
+- **Instagram reels** work through yt-dlp but usually need you to be signed in: add `--cookies-from-browser chrome` (or your browser), or save `WATCH_COOKIES_FROM_BROWSER=chrome` in `~/.config/watch/.env`.
+- **Google Drive** file links work when the file is shared as *Anyone with the link*. Folder links and private files are not supported; download those and pass the local path.
+- **MEGA** file links (keep the `#key` part) need [megatools](https://megatools.megous.com/) (`brew install megatools`, `sudo apt install megatools`) or [MEGAcmd](https://mega.io/cmd).
+
 ## Missing tools?
 
 Watch uses **Python 3.10+, FFmpeg/ffprobe, and current yt-dlp**. YouTube also needs a supported JavaScript runtime/EJS setup. Installing the skill gives the agent instructions and scripts; it does not bundle these programs.
