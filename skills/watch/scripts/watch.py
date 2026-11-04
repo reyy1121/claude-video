@@ -24,6 +24,7 @@ from frames import MAX_FPS, auto_fps, auto_fps_focus, extract_at_timestamps, ext
 from transcribe import filter_range, format_transcript, parse_vtt  # noqa: E402
 from whisper import load_api_key, transcribe_video  # noqa: E402
 from runtime import configure_stdio  # noqa: E402
+from sources import cloud_kind, fetch_cloud  # noqa: E402
 
 
 LOCAL_ONLY_FLAGS = (("--detail", "detail"), ("--fps", "fps"), ("--max-frames", "max_frames"),
@@ -66,7 +67,7 @@ def run_gemini(args, config, key, start_sec, end_sec, auth) -> int:
     print()
     print("# watch: video report")
     print()
-    print(f"- **Source:** {args.source} ({sent})")
+    print(f"- **Source:** {getattr(args, 'display_source', args.source)} ({sent})")
     print(f"- **Engine:** {config['gemini_model']} ({result['processing'] if result else 'failed'})")
     if clip:
         print(f"- **Focus range:** {format_time(start_sec or 0)} → {format_time(end_sec) if end_sec is not None else 'end'}")
@@ -162,13 +163,30 @@ def main() -> int:
     auth = {"cookies_file": cookies_file, "cookies_from_browser": cookies_browser}
 
     gemini_key = load_gemini_key()
-    if resolve_engine(args.engine or config["engine"], bool(gemini_key)) == "gemini":
-        return run_gemini(args, config, gemini_key, start_sec, end_sec, auth)
+    engine = resolve_engine(args.engine or config["engine"], bool(gemini_key))
 
     parent = Path(args.out_dir).expanduser().resolve() if args.out_dir else None
     if parent:
         parent.mkdir(parents=True, exist_ok=True)
-    work = Path(tempfile.mkdtemp(prefix="watch-", dir=parent))
+    cloud_work = None
+    if cloud_kind(args.source):
+        # Google Drive / MEGA: fetch into a run-owned directory, then treat it as a local file.
+        cloud_work = Path(tempfile.mkdtemp(prefix="watch-", dir=parent))
+        try:
+            fetched = fetch_cloud(args.source, cloud_work / "download")
+        except SystemExit:
+            shutil.rmtree(cloud_work, ignore_errors=True)
+            raise
+        args.display_source, args.source = args.source, fetched["video_path"]
+
+    if engine == "gemini":
+        try:
+            return run_gemini(args, config, gemini_key, start_sec, end_sec, auth)
+        finally:
+            if cloud_work:
+                shutil.rmtree(cloud_work, ignore_errors=True)
+
+    work = cloud_work or Path(tempfile.mkdtemp(prefix="watch-", dir=parent))
     print(f"[watch] working dir: {work}", file=sys.stderr)
     url_source = is_url(args.source)
     dl = {"subtitle_path": None, "info": {}, "downloaded": False}
@@ -299,7 +317,7 @@ def main() -> int:
     print()
     print("# watch: video report")
     print()
-    print(f"- **Source:** {args.source}")
+    print(f"- **Source:** {getattr(args, 'display_source', args.source)}")
     if video_path:
         print(f"- **Local media:** `{video_path}`")
     if visual_error:

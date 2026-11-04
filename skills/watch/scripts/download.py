@@ -48,7 +48,10 @@ def _common(directory: Path, auth: list[str]) -> list[str]:
 def network_diagnostic(stderr: str) -> str:
     detail = diagnostic(stderr)
     lower = detail.lower()
-    if any(s in lower for s in ('javascript runtime', 'js runtime', 'ejs', 'challenge solver')):
+    if 'instagram' in lower and any(s in lower for s in ('login', 'rate-limit', 'rate limit', 'not available', 'cookies')):
+        hint = ('Instagram usually requires sign-in: rerun with --cookies-from-browser chrome (or firefox, safari, edge) '
+                'while logged in to Instagram in that browser, or save WATCH_COOKIES_FROM_BROWSER in the config.')
+    elif any(s in lower for s in ('javascript runtime', 'js runtime', 'ejs', 'challenge solver')):
         hint = 'Update yt-dlp with its owning package manager and check Deno/EJS using setup.py --json.'
     elif any(s in lower for s in ('sign in', 'login required', 'authentication required', 'confirm you’re not a bot', "confirm you're not a bot")):
         hint = 'This source requires authentication; supply an explicit cookie option if you have access.'
