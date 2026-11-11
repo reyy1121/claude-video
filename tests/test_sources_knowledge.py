@@ -161,5 +161,50 @@ def test_default_dir_and_env_override(tmp_path, monkeypatch):
 
 def test_skill_documents_learn_mode_and_sources():
     skill = (ROOT / 'skills/watch/SKILL.md').read_text(encoding='utf-8')
-    for needle in ('knowledge.py', 'Learn mode', 'PLAYBOOK.md', 'megadl', 'Google Drive', 'Instagram', '--flat-playlist'):
+    for needle in ('knowledge.py', 'Learn mode', 'PLAYBOOK.md', 'megadl', 'Google Drive', 'Instagram', 'batch.py', '--exclude', 'mega.nz/folder'):
         assert needle in skill, needle
+
+
+def test_mega_folder_excludes_and_orders(monkeypatch, tmp_path):
+    def fake_run(cmd, **kwargs):
+        dest = Path(cmd[cmd.index('--path') + 1])
+        for name in ('00 Group Buy/intro.mp4', '10 Pricing.mp4', '2 Offers.mp4', 'notes.pdf'):
+            f = dest / 'Course' / name
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_bytes(b'x')
+        return subprocess.CompletedProcess(cmd, 0, '', '')
+    monkeypatch.setattr(sources.shutil, 'which', lambda n: '/usr/bin/megadl' if n == 'megadl' else None)
+    monkeypatch.setattr(sources, 'run_text', fake_run)
+    url = 'https://mega.nz/folder/a7ImXRrb#key'
+    assert sources.is_mega_folder(url) and not sources.is_mega_folder('https://mega.nz/file/a#k')
+    videos = sources.fetch_mega_folder(url, tmp_path / 'c', ['00 group buy'])
+    assert [v.name for v in videos] == ['2 Offers.mp4', '10 Pricing.mp4']
+    assert not list((tmp_path / 'c').rglob('intro.mp4'))
+    with pytest.raises(SystemExit, match='batch.py'):
+        sources.fetch_mega(url, tmp_path)
+
+
+def test_batch_queue_resumes(monkeypatch, tmp_path, capsys):
+    import batch
+    lib = tmp_path / 'lib'
+    links = tmp_path / 'links.txt'
+    links.write_text('https://www.instagram.com/reel/a/\nnot a link\nhttps://www.instagram.com/reel/b/\n')
+    run = lambda *a: (batch.main(['--dir', str(lib), *a]), json.loads(capsys.readouterr().out))[1]
+    out = run('enqueue', '--links-file', str(links))
+    assert out['total'] == 2 and out['pending'] == 2
+    first = run('next')['next']
+    assert first['id'] == 1
+    assert run('done', '1')['done'] == 1
+    assert run('next')['next']['id'] == 2
+    run('skip', '2', '--reason', 'private')
+    assert run('next')['next'] is None
+    assert run('status')['items'][1]['reason'] == 'private'
+
+
+def test_batch_enumerates_playlist_with_exclude(monkeypatch, tmp_path, capsys):
+    import batch
+    monkeypatch.setattr(batch, 'run_text', lambda cmd, **k: subprocess.CompletedProcess(
+        cmd, 0, 'https://youtu.be/1\tIntro\nhttps://youtu.be/2\tGroup Buy promo\nhttps://youtu.be/3\tOffers\n', ''))
+    batch.main(['--dir', str(tmp_path / 'lib'), 'enqueue', 'https://www.youtube.com/@x/videos', '--exclude', 'group buy'])
+    out = json.loads(capsys.readouterr().out)
+    assert out['total'] == 2 and out['titles'] == ['1. Intro', '2. Offers']

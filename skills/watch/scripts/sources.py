@@ -115,9 +115,49 @@ def mega_command(url: str, run_dir: Path) -> list[str]:
                      'Windows: MEGAcmd from https://mega.io/cmd), or download the file and pass the local path.')
 
 
+def is_mega_folder(url: str) -> bool:
+    return cloud_kind(url) == 'mega' and ('/folder/' in url or '#F!' in url)
+
+
+def natural_key(path: Path):
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', str(path))]
+
+
+def excluded(path: Path, root: Path, patterns: list[str]) -> bool:
+    rel = str(path.relative_to(root)).lower()
+    return any(p.strip().lower() in rel for p in patterns if p.strip())
+
+
+def fetch_mega_folder(url: str, dest: Path, exclude: list[str] | None = None) -> list[Path]:
+    """Download a whole MEGA folder into dest (reusing files already there), skip --exclude matches.
+
+    megatools cannot list a folder without an account, so the folder is downloaded and excluded
+    files are deleted afterwards. Returns the course videos in natural order (1, 2, 10, not 1, 10, 2).
+    """
+    dest.mkdir(parents=True, exist_ok=True)
+    cmd = mega_command(url, dest)
+    result = run_text(cmd)
+    if result.returncode != 0:
+        raise SystemExit(f'MEGA folder download failed (exit {result.returncode}): '
+                         f'{diagnostic(result.stderr or result.stdout, 800)}')
+    patterns = exclude or []
+    videos = []
+    for path in dest.rglob('*'):
+        if not path.is_file() or path.name.startswith('.megatmp'):
+            continue
+        if excluded(path, dest, patterns):
+            path.unlink(missing_ok=True)
+        elif path.suffix.lower() in VIDEO_EXTS and path.stat().st_size > 0:
+            videos.append(path)
+    if not videos:
+        raise SystemExit('The MEGA folder downloaded but contained no video files (after exclusions).')
+    return sorted(videos, key=natural_key)
+
+
 def fetch_mega(url: str, run_dir: Path) -> dict:
-    if '/folder/' in url or '#F!' in url:
-        raise SystemExit('MEGA folder links are not supported; share one video file link at a time.')
+    if is_mega_folder(url):
+        raise SystemExit('This is a MEGA folder. Use `batch.py enqueue <folder-link>` to learn a whole course, '
+                         'or share one video file link.')
     run_dir.mkdir(parents=True, exist_ok=True)
     result = run_text(mega_command(url, run_dir))
     if result.returncode != 0:
