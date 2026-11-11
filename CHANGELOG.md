@@ -5,6 +5,7 @@ All notable changes to `/watch` are documented here.
 ## [Unreleased]
 
 ### Added
+- **MEGA folder links (courses)** and a resumable batch queue, `batch.py`: `enqueue` (YouTube channel/playlist, MEGA folder, or `--links-file`, with repeatable `--exclude`), `next`, `done`, `skip`, `status`, `reset`.
 - **Learn mode and personal advisor skill.** `knowledge.py` saves a structured note per watched video into a library folder that is itself a skill (default `~/.claude/skills/video-advisor`, `WATCH_KNOWLEDGE_DIR` to change). The generated `SKILL.md` guides decisions from the saved knowledge with citations, disagreements, risks, and next steps, and can log decisions. `PLAYBOOK.md` collects cross-video decision rules and is never overwritten. Commands: `init`, `add`, `list`, `search`, `remove`, `rebuild`, `path`.
 - **Google Drive and MEGA links.** Publicly shared Drive files are fetched directly; MEGA file links use megatools or MEGAcmd. Both are then processed like local files by either engine.
 - Instagram-specific sign-in hint pointing to `--cookies-from-browser`; SKILL.md documents playlist/channel batch learning.
